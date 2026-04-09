@@ -1,0 +1,33 @@
+# Create the .dockerignore file
+New-Item -Path ".dockerignore" -ItemType File -Force
+
+# Add content to exclude the virtual environment
+@"
+# Virtual environments
+nu_ai_venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.pyc
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+"@ | Out-File -FilePath .dockerignore -Encoding utf8

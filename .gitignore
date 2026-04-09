@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+venv/
+env/
+.venv/
+__pycache__/
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.pyc
+
+# Vector store
+vector_store/
+data/documents/
+
+# Database
+mongodb-data/
+*.db
+*.sqlite
+
+# Secrets
+*.pem
+*.key
+*.cert
+.secrets/
+
+# Frontend cache
+frontend/.cache/
+frontend/dist/
+
+# Backend cache
+backend/__pycache__/
+
+# Uploads
+uploads/
+documents_upload/
+
+# Testing
+.pytest_cache/
+.tox/
+htmlcov/
+coverage/
+
+# Backup files
+*.bak
+*.backup
+*~
