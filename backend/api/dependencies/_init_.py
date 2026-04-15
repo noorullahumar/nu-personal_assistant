@@ -1,8 +1,3 @@
-"""
-Dependencies package for FastAPI routes
-Location: backend/api/dependencies/__init__.py
-"""
-
 from backend.api.dependencies.auth_deps import (
     get_current_user,
     get_current_admin,

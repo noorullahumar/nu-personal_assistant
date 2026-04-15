@@ -12,13 +12,3 @@ async def health_check():
         "service": "NU AI Assistant API",
         "version": "2.0.0"
     }
-
-@router.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "NU AI Assistant API",
-        "version": "2.0.0",
-        "status": "running",
-        "docs": "/docs"
-    }

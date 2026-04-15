@@ -1,69 +1,134 @@
-# Dependencies
-node_modules/
-venv/
-env/
-.venv/
-__pycache__/
-
-# Environment files
+# ============================================
+# ENVIRONMENT FILES (CRITICAL - NEVER COMMIT)
+# ============================================
 .env
 .env.local
 .env.production
 .env.development
+.env.*.local
+.env.docker
+.env.backup
+*.env
 
-# IDE files
+# ============================================
+# SECRETS & KEYS (CRITICAL)
+# ============================================
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+.secrets/
+secrets/
+credentials.json
+service-account.json
+
+# ============================================
+# DEPENDENCIES
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# ============================================
+# IDE & EDITOR FILES
+# ============================================
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS files
+*~
 .DS_Store
 Thumbs.db
+desktop.ini
+.vs/
 
-# Logs
+# ============================================
+# LOGS & TEMP FILES
+# ============================================
 *.log
 logs/
-npm-debug.log*
+*.tmp
+*.temp
+.cache/
+*.pid
+*.seed
 
-# Build outputs
-dist/
-build/
-*.pyc
-
-# Vector store
-vector_store/
-data/documents/
-
-# Database
-mongodb-data/
+# ============================================
+# DATABASE FILES
+# ============================================
 *.db
 *.sqlite
+*.sqlite3
+*.dump
+mongodb-data/
+postgres-data/
 
-# Secrets
-*.pem
-*.key
-*.cert
-.secrets/
-
-# Frontend cache
-frontend/.cache/
-frontend/dist/
-
-# Backend cache
-backend/__pycache__/
-
-# Uploads
+# ============================================
+# DATA & UPLOADS (Use volumes instead)
+# ============================================
+data/
 uploads/
-documents_upload/
+documents/
+media/
+vector_store/
+*.bin
+*.pickle
 
-# Testing
+# ============================================
+# TESTING & COVERAGE
+# ============================================
 .pytest_cache/
-.tox/
+.coverage
 htmlcov/
+.tox/
+*.cover
+.nyc_output/
 coverage/
 
-# Backup files
+# ============================================
+# DOCKER
+# ============================================
+.dockerignore
+docker-compose.override.yml
+docker-compose.*.yml
+
+# ============================================
+# BACKUP FILES
+# ============================================
 *.bak
 *.backup
+*.old
+*.orig
 *~
+
+# ============================================
+# CI/CD & DEPLOYMENT
+# ============================================
+.github/
+.gitlab/
+.ci/
+jenkins/
+deploy/
+*.pem
+
+# ============================================
+# OS FILES
+# ============================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db

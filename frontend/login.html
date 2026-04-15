@@ -4,10 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="...">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <title>Login - NU AI Assistant</title>
-    <link rel="stylesheet" href="/frontend/css/landing.css">
+    <link rel="stylesheet" href="/css/landing.css">
     <style>
         .auth-container {
             min-height: 100vh;
@@ -169,39 +167,38 @@
                     <input type="password" id="password" required placeholder="••••••••">
                 </div>
                 <div class="forgot-link">
-                    <a href="/frontend/forgot_password.html">Forgot password?</a>
+                    <a href="forgot_password.html">Forgot password?</a>
                 </div>
                 <button type="submit" class="auth-btn" id="login-btn">Login</button>
             </form>
 
             <div class="auth-footer">
-                Don't have an account? <a href="/frontend/register.html">Sign Up</a>
+                Don't have an account? <a href="register.html">Sign Up</a>
             </div>
         </div>
     </div>
-    <script src="/frontend/js/config.js"></script>
-    <script src="/frontend/js/security.js"></script>
-    <script src="/frontend/js/session.js"></script>
-    <script>
-        const API_BASE_URL = CONFIG.API_URL;
 
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:8000';
+        
         // Redirect if already logged in
         if (localStorage.getItem('token')) {
-            window.location.href = '/frontend/chat.html';
+            window.location.href = 'chat.html';
         }
-
-        // Add to auth.js
+        
         let lastSubmitTime = 0;
-        const SUBMIT_DELAY = 2000; // 2 seconds
+        const SUBMIT_DELAY = 2000;
 
         async function handleLogin(event) {
             event.preventDefault();
+            
             const now = Date.now();
             if (now - lastSubmitTime < SUBMIT_DELAY) {
                 showError('Please wait before trying again');
                 return;
             }
             lastSubmitTime = now;
+            
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('error-message');
@@ -209,7 +206,6 @@
 
             errorDiv.style.display = 'none';
 
-            // Show loading state
             loginBtn.disabled = true;
             loginBtn.innerHTML = '<span class="loading-spinner"></span> Logging in...';
 
@@ -225,14 +221,13 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Check if user has admin role (redirect admin to admin panel)
                     if (data.user && data.user.role === 'admin') {
                         localStorage.setItem('adminToken', data.access_token);
-                        window.location.href = '/frontend/admin.html';
+                        window.location.href = 'admin.html';
                     } else {
-                        // Regular user - go to chat
-                        document.cookie = `token=${data.access_token}; HttpOnly; Secure; SameSite=Strict; Path=/`;
-                        window.location.href = '/frontend/chat.html';
+                        localStorage.setItem('token', data.access_token);
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        window.location.href = 'chat.html';
                     }
                 } else {
                     errorDiv.textContent = data.detail || 'Login failed';
@@ -247,6 +242,15 @@
                 loginBtn.disabled = false;
                 loginBtn.innerHTML = 'Login';
             }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 3000);
         }
 
         window.handleLogin = handleLogin;

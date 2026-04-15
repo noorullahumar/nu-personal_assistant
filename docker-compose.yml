@@ -1,0 +1,38 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: nu_ai_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: nu_ai_assistant
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - nu_ai_network
+
+  backend:
+    image: nu_ai:0.0.4
+    container_name: nu_ai_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb://admin:admin123@mongodb:27017/nu_ai_assistant?authSource=admin
+      - DATABASE_NAME=nu_ai_assistant
+      - DEBUG=False
+    depends_on:
+      - mongodb
+    networks:
+      - nu_ai_network
+
+networks:
+  nu_ai_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

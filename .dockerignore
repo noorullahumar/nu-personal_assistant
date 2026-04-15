@@ -1,33 +1,118 @@
-# Create the .dockerignore file
-New-Item -Path ".dockerignore" -ItemType File -Force
+# ============================================
+# ENVIRONMENT FILES (NEVER COPY TO IMAGE)
+# ============================================
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+.secrets/
 
-# Add content to exclude the virtual environment
-@"
-# Virtual environments
-nu_ai_venv/
+# ============================================
+# VERSION CONTROL
+# ============================================
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+.svn/
+.hg/
+
+# ============================================
+# DEVELOPMENT FILES
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+README.md
+LICENSE
+CHANGELOG.md
+CONTRIBUTING.md
+
+# ============================================
+# DEPENDENCIES (Will be installed in container)
+# ============================================
+node_modules/
 venv/
 env/
-ENV/
+.venv/
 __pycache__/
 *.pyc
 
-# Git
-.git/
-.gitignore
-
-# IDE
-.vscode/
-.idea/
-
-# Environment files
-.env
-.env.local
-
-# Logs
+# ============================================
+# LOGS & TEMP
+# ============================================
 *.log
 logs/
+*.tmp
+*.temp
+.cache/
+.pytest_cache/
+.tox/
 
-# OS files
+# ============================================
+# DATA FILES (Use volumes in production)
+# ============================================
+data/
+uploads/
+documents/
+vector_store/
+*.db
+*.sqlite
+mongodb-data/
+
+# ============================================
+# DOCKER FILES (Don't copy docker files into image)
+# ============================================
+Dockerfile
+docker-compose*.yml
+docker-compose*.yaml
+.dockerignore
+
+# ============================================
+# CI/CD
+# ============================================
+.github/
+.gitlab/
+.ci/
+jenkins/
+.gitlab-ci.yml
+.travis.yml
+
+# ============================================
+# TESTING
+# ============================================
+tests/
+test/
+__tests__/
+*.test.js
+*.spec.js
+*.test.py
+coverage/
+.nyc_output/
+
+# ============================================
+# DOCUMENTATION
+# ============================================
+docs/
+*.md
+!README.md  # Include README if needed
+
+# ============================================
+# BACKUP FILES
+# ============================================
+*.bak
+*.backup
+*.old
+
+# ============================================
+# OS SPECIFIC
+# ============================================
 .DS_Store
 Thumbs.db
-"@ | Out-File -FilePath .dockerignore -Encoding utf8
+Desktop.ini

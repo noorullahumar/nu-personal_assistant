@@ -7,27 +7,23 @@ from datetime import datetime
 import logging
 from backend.rag.ingest import process_pdf_to_mongodb
 from backend.rag.rag_pipeline import build_vector_store
-import re
-import magic
-import hashlib
-from typing import List
-
-
+import secrets
 
 from backend.database.mongodb import (
     file_collection, doc_collection, user_collection,
     conversation_collection, chat_collection, activity_log_collection,
-    admin_2fa_collection, admin_session_collection
+    admin_2fa_collection, admin_session_collection, contact_collection  
 )
 
+from backend.api.dependencies.auth_deps import get_current_admin
 from backend.config import settings
-from backend.core.security import sanitize_filename
+from backend.core.security import  sanitize_filename ,get_password_hash
 from backend.api.dependencies.auth_deps import *
 from backend.database.repositories.user_repo import UserRepository
 from backend.rag.ingest import process_pdf_to_mongodb
 from backend.models.schemas import (
     DocumentInfo, DocumentUploadResponse, DocumentDeleteResponse,
-    SystemStats, ActivityLog, UserResponse, AdminLoginRequest, Admin2FAVerifyRequest
+    SystemStats, ActivityLog, UserResponse, AdminLoginRequest, Admin2FAVerifyRequest, CreateAdminRequest
 )
 
 from backend.api.dependencies.admin_auth import AdminAuth
@@ -70,6 +66,7 @@ async def verify_2fa(request: Request, verify_data: Admin2FAVerifyRequest):
     
     return result
 
+
 @router.get("/documents", response_model=List[DocumentInfo])
 async def list_documents(
     current_admin: dict = Depends(get_current_admin),
@@ -80,7 +77,7 @@ async def list_documents(
         logger.info(f"Admin {current_admin['email']} listing documents")
         
         documents = []
-        cursor = file_collection.find().sort("upload_date").skip(skip).limit(limit)
+        cursor = file_collection.find().sort("upload_date", -1).skip(skip).limit(limit)
         
         async for doc in cursor:
             uploader = await user_collection.find_one({"user_id": doc.get("uploaded_by", "unknown")})
@@ -104,6 +101,7 @@ async def list_documents(
         logger.error(f"Error listing documents: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to list documents: {str(e)}")
 
+
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
@@ -112,78 +110,83 @@ async def upload_document(
     try:
         logger.info(f"Admin {current_admin['email']} uploading file: {file.filename}")
 
-        # 1. READ INITIAL BYTES FOR VALIDATION
-        # We read the first 2KB for both MIME check and suspicious pattern check
-        header_content = await file.read(2048)
+        # -------- FILE VALIDATION --------
+        # Check file extension
+        allowed_extensions = ['.pdf', '.txt', '.doc', '.docx']
+        filename_lower = file.filename.lower()
+        ext = filename_lower.split('.')[-1]
         
-        # 2. MIME TYPE VALIDATION (Content-based)
-        mime = magic.from_buffer(header_content, mime=True)
-        allowed_mimes = [
-            'application/pdf', 
-            'text/plain', 
-            'image/png', 
-            'image/jpeg',
-            'application/msword', 
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ]
-        
-        if mime not in allowed_mimes:
-            raise HTTPException(status_code=400, detail=f"Invalid file content type: {mime}")
-
-        # 3. EXTENSION & SUSPICIOUS PATTERN VALIDATION
-        allowed_extensions = ['.pdf', '.txt', '.doc', '.docx', '.png', '.jpg', '.jpeg']
-        filename = file.filename.lower()
-        ext = filename.split('.')[-1]
-        
-        if not any(filename.endswith(allowed_ext) for allowed_ext in allowed_extensions):
+        if not any(filename_lower.endswith(allowed_ext) for allowed_ext in allowed_extensions):
             raise HTTPException(
                 status_code=400, 
-                detail=f"File extension .{ext} not allowed."
+                detail=f"File type .{ext} not allowed. Allowed types: pdf, txt, doc, docx"
             )
-
-        suspicious_patterns = [
-            b'<?php', b'<script', b'exec(', b'system(', b'eval(', 
-            b'base64_decode', b'passthru(', b'shell_exec', 
-            b'javascript:', b'onload=', b'onerror='
-        ]
         
-        for pattern in suspicious_patterns:
-            if pattern in header_content:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="File contains suspicious code patterns."
-                )
-
-        # 4. FILE SIZE VALIDATION
-        # Move to end to check size, then reset
-        await file.seek(0, os.SEEK_END)
-        file_size = await file.tell()
+        # Check file size
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
         
         if file_size > 10 * 1024 * 1024:  # 10MB
             raise HTTPException(status_code=400, detail="File too large (max 10MB)")
-
-        # IMPORTANT: Reset pointer to start before saving
-        await file.seek(0)
-
-        # 5. GENERATE SAFE FILENAME
+        
+        # Basic malware check on first 1KB of file
+        file_content = await file.read(1024)
+        await file.seek(0)  # Reset file pointer
+        
+        suspicious_patterns = [
+            b'<?php',
+            b'<script',
+            b'exec(',
+            b'system(',
+            b'eval(',
+            b'base64_decode',
+            b'passthru(',
+            b'shell_exec',
+            b'javascript:',
+            b'onload=',
+            b'onerror=',
+        ]
+        
+        for pattern in suspicious_patterns:
+            if pattern in file_content:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="File contains suspicious content and was rejected for security reasons"
+                )
+        
+        # Generate safe filename
+        import hashlib
+        
         safe_filename = hashlib.sha256(
             f"{datetime.utcnow().isoformat()}{file.filename}".encode()
         ).hexdigest()
         safe_filename = f"{safe_filename}.{ext}"
         
-        # 6. FILE STORAGE
+        # -------- FILE STORAGE --------
         document_id = str(uuid.uuid4())
+        
+        # Create directory if it doesn't exist
         os.makedirs("data/documents", exist_ok=True)
+        
+        # Use safe filename to prevent path traversal attacks
         file_path = f"data/documents/{safe_filename}"
         
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            # Read file in chunks to avoid memory issues
+            while True:
+                chunk = await file.read(8192)
+                if not chunk:
+                    break
+                buffer.write(chunk)
         
-        # 7. METADATA PERSISTENCE
+        logger.info(f"File saved to: {file_path}")
+        
+        # -------- METADATA --------
         doc_metadata = {
             "document_id": document_id,
-            "filename": file.filename,
-            "safe_filename": safe_filename,
+            "filename": file.filename,  # Store original filename for display
+            "safe_filename": safe_filename,  # Store safe filename for reference
             "file_path": file_path,
             "file_type": ext,
             "size": file_size,
@@ -191,53 +194,92 @@ async def upload_document(
             "status": "processing",
             "chunk_count": 0,
             "uploaded_by": current_admin["user_id"],
+            "metadata": {}
         }
+        
         await file_collection.insert_one(doc_metadata)
-
-        # 8. DOCUMENT PROCESSING (PDF/Text)
+        logger.info(f"Document metadata saved for {document_id}")
+        
+        # -------- DOCUMENT PROCESSING --------
         chunk_count = 0
+        
         if ext in ["pdf", "txt", "doc", "docx"]:
             try:
+                # Process the document and extract chunks
                 chunk_count = await process_pdf_to_mongodb(file_path, document_id)
+                
+                # Update document status to active
                 await file_collection.update_one(
                     {"document_id": document_id},
-                    {"$set": {"status": "active", "chunk_count": chunk_count, "processed_at": datetime.utcnow()}}
+                    {
+                        "$set": {
+                            "status": "active",
+                            "chunk_count": chunk_count,
+                            "processed_at": datetime.utcnow()
+                        }
+                    }
                 )
+                
+                # Rebuild vector store with new document
                 await build_vector_store()
+                logger.info(f"Vector store rebuilt after uploading {file.filename} with {chunk_count} chunks")
+                
             except Exception as e:
-                logger.error(f"Processing failed: {e}")
+                logger.error(f"Error processing document {document_id}: {e}", exc_info=True)
+                
+                # Update document status to failed
                 await file_collection.update_one(
                     {"document_id": document_id},
                     {"$set": {"status": "failed", "error": str(e)}}
                 )
-                raise HTTPException(status_code=500, detail="Processing failed")
+                
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Document uploaded but processing failed: {str(e)}"
+                )
         else:
+            # For non-text files, just mark as active without processing
             await file_collection.update_one(
                 {"document_id": document_id},
                 {"$set": {"status": "active"}}
             )
-
-        # 9. ACTIVITY LOGGING
+            logger.info(f"Non-text file {file.filename} uploaded (no processing needed)")
+        
+        # -------- ACTIVITY LOG --------
         await activity_log_collection.insert_one({
             "log_id": str(uuid.uuid4()),
             "user_id": current_admin["user_id"],
+            "username": current_admin["email"],
             "action": "DOCUMENT_UPLOADED",
-            "details": {"document_id": document_id, "filename": file.filename},
-            "timestamp": datetime.utcnow()
+            "details": {
+                "document_id": document_id,
+                "filename": file.filename,
+                "file_type": ext,
+                "size": file_size,
+                "chunk_count": chunk_count,
+                "status": "active" if ext in ["pdf", "txt", "doc", "docx"] else "active_no_processing"
+            },
+            "timestamp": datetime.utcnow(),
+            "ip_address": None
         })
+        
+        logger.info(f"Document {document_id} uploaded successfully by {current_admin['email']}")
         
         return DocumentUploadResponse(
             document_id=document_id,
             filename=file.filename,
-            message=f"Success! {chunk_count} chunks processed." if chunk_count > 0 else "Upload successful.",
+            message=f"Document uploaded successfully with {chunk_count} chunks processed" if chunk_count > 0 else "Document uploaded successfully",
             chunk_count=chunk_count
         )
-
+        
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Server Error")@router.delete("/documents/{document_id}", response_model=DocumentDeleteResponse)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@router.delete("/documents/{document_id}", response_model=DocumentDeleteResponse)
 async def delete_document(
     document_id: str,
     current_admin: dict = Depends(get_current_admin)
@@ -291,6 +333,7 @@ async def delete_document(
         logger.error(f"Delete error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
 
+
 @router.get("/documents/search")
 async def search_documents(
     query: str,
@@ -301,10 +344,8 @@ async def search_documents(
         
         results = []
         
-
-        safe_query = re.escape(query)  # Escape regex special characters
         file_cursor = file_collection.find({
-            "filename": {"$regex": safe_query, "$options": "i"}
+            "filename": {"$regex": query, "$options": "i"}
         }).limit(10)
         
         async for doc in file_cursor:
@@ -338,6 +379,7 @@ async def search_documents(
     except Exception as e:
         logger.error(f"Search error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
 
 @router.get("/stats", response_model=SystemStats)
 async def get_system_stats(current_admin: dict = Depends(get_current_admin)):
@@ -375,6 +417,7 @@ async def get_system_stats(current_admin: dict = Depends(get_current_admin)):
         logger.error(f"Stats error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get system stats: {str(e)}")
 
+
 @router.get("/users", response_model=List[UserResponse])
 async def list_users(current_admin: dict = Depends(get_current_admin)):
     try:
@@ -398,6 +441,7 @@ async def list_users(current_admin: dict = Depends(get_current_admin)):
     except Exception as e:
         logger.error(f"List users error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to list users: {str(e)}")
+
 
 @router.delete("/users/{user_id}")
 async def delete_user(
@@ -448,6 +492,7 @@ async def delete_user(
         logger.error(f"Delete user error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
+
 @router.get("/logs", response_model=List[ActivityLog])
 async def get_activity_logs(
     current_admin: dict = Depends(get_current_admin),
@@ -458,7 +503,7 @@ async def get_activity_logs(
         logger.info(f"Admin {current_admin['email']} requesting activity logs")
         
         logs = []
-        cursor = activity_log_collection.find().sort("timestamp").skip(skip).limit(limit)
+        cursor = activity_log_collection.find().sort("timestamp", -1).skip(skip).limit(limit)
         
         async for log in cursor:
             logs.append(ActivityLog(
@@ -476,6 +521,7 @@ async def get_activity_logs(
     except Exception as e:
         logger.error(f"Logs error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get activity logs: {str(e)}")
+
 
 @router.get("/health")
 async def admin_health_check(current_admin: dict = Depends(get_current_admin)):
@@ -514,15 +560,77 @@ async def admin_health_check(current_admin: dict = Depends(get_current_admin)):
     except Exception as e:
         logger.error(f"Health check error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
-    
+
+
 @router.get("/contacts")
 async def get_contact_messages(current_admin: dict = Depends(get_current_admin)):
     """Get all contact messages (admin only)"""
     try:
-        # For demo: read from localStorage equivalent
-        # In production, store in MongoDB
         messages = []
-        # You can store contacts in MongoDB instead of localStorage
+        # Query contact_messages collection using the imported contact_collection
+        cursor = contact_collection.find().sort("submitted_at", -1)
+        async for msg in cursor:
+            messages.append({
+                "message_id": msg.get("message_id"),
+                "name": msg.get("name"),
+                "email": msg.get("email"),
+                "subject": msg.get("subject"),
+                "message": msg.get("message"),
+                "status": msg.get("status", "pending"),
+                "submitted_at": msg.get("submitted_at"),
+                "replied_at": msg.get("replied_at"),
+                "admin_reply": msg.get("admin_reply")
+            })
         return {"messages": messages}
     except Exception as e:
+        logger.error(f"Get contacts error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.post("/create-admin")
+async def create_admin_endpoint(request: CreateAdminRequest):
+    """
+    Create admin user via API (requires admin_secret)
+    """
+    # Verify admin secret key (store this in environment variables)
+    ADMIN_CREATION_SECRET = os.getenv("ADMIN_CREATION_SECRET", "your-super-secret-key-change-this")
+    
+    if request.admin_secret != ADMIN_CREATION_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    
+    # Check if user already exists
+    existing_user = await user_collection.find_one({
+        "$or": [
+            {"email": request.email.lower()},
+            {"username": request.username}
+        ]
+    })
+    
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # Create admin user
+    user_id = secrets.token_urlsafe(16)
+    hashed_password = get_password_hash(request.password)
+    
+    admin_user = {
+        "user_id": user_id,
+        "username": request.username,
+        "email": request.email.lower(),
+        "hashed_password": hashed_password,
+        "role": "admin",
+        "created_at": datetime.utcnow(),
+        "is_active": True,
+        "is_verified": True,
+        "failed_login_attempts": 0,
+        "last_login": None
+    }
+    
+    await user_collection.insert_one(admin_user)
+    
+    return {
+        "message": "Admin user created successfully",
+        "user_id": user_id,
+        "email": request.email,
+        "username": request.username
+    }

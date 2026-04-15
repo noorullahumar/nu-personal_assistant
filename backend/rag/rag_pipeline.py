@@ -7,9 +7,11 @@ from backend.database.mongodb import doc_collection
 from backend.rag.spell_check import correct_spelling, fuzzy_match_query, expand_query_with_synonyms
 import logging
 import hashlib
+from backend.config import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+openai_api_key = settings.OPENAI_API_KEY
 VECTOR_PATH = "vector_store"
 
 embeddings = OpenAIEmbeddings()

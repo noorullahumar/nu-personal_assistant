@@ -207,3 +207,9 @@ class Admin2FAVerifyRequest(BaseModel):
     user_id: str
     code: str
     temp_token: str
+
+class CreateAdminRequest(BaseModel):
+    email: str
+    username: str
+    password: str
+    admin_secret: str  # Secret key to prevent unauthorized admin creation

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign Up - NU AI Assistant</title>
-    <link rel="stylesheet" href="/frontend/css/landing.css">
+    <link rel="stylesheet" href="/css/landing.css">
     <style>
         .auth-container {
             min-height: 100vh;
@@ -179,7 +179,7 @@
             </form>
             
             <div class="auth-footer">
-                Already have an account? <a href="/frontend/login.html">Login</a>
+                Already have an account? <a href="login.html">Login</a>
             </div>
         </div>
     </div>
@@ -189,7 +189,7 @@
         
         // Redirect if already logged in
         if (localStorage.getItem('token')) {
-            window.location.href = '/frontend/chat.html';
+            window.location.href = 'chat.html';
         }
         
         async function handleRegister(event) {
@@ -206,7 +206,6 @@
             errorDiv.style.display = 'none';
             successDiv.style.display = 'none';
             
-            // Client-side validation
             if (username.length < 3) {
                 errorDiv.textContent = 'Username must be at least 3 characters';
                 errorDiv.style.display = 'block';
@@ -237,12 +236,10 @@
                 return;
             }
             
-            // Show loading state
             registerBtn.disabled = true;
             registerBtn.innerHTML = '<span class="loading-spinner"></span> Creating account...';
             
             try {
-                // Step 1: Register the user
                 const registerResponse = await fetch(`${API_BASE_URL}/api/auth/register`, {
                     method: 'POST',
                     headers: {
@@ -254,22 +251,17 @@
                 const registerData = await registerResponse.json();
                 
                 if (registerResponse.ok) {
-                    // Registration successful - user is automatically logged in
-                    // The backend returns the token directly
-                    sessionStorage.setItem('token', registerData.access_token);;
+                    localStorage.setItem('token', registerData.access_token);
                     localStorage.setItem('user', JSON.stringify(registerData.user));
                     
-                    // Show success message
                     successDiv.textContent = 'Account created successfully! Redirecting to chat...';
                     successDiv.style.display = 'block';
                     
-                    // Redirect to chat page after short delay
                     setTimeout(() => {
-                        window.location.href = '/frontend/chat.html';
+                        window.location.href = 'chat.html';
                     }, 1500);
                     
                 } else {
-                    // Registration failed
                     errorDiv.textContent = registerData.detail || 'Registration failed';
                     errorDiv.style.display = 'block';
                     registerBtn.disabled = false;
