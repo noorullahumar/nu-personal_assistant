@@ -1,5 +1,5 @@
 // ========== CONFIGURATION ==========
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = 'http://nu-ai-env.eba-ijpiuack.eu-north-1.elasticbeanstalk.com/';
 
 // Profile Image Configuration
 const MY_PROFILE_IMAGE = "/frontend/images/noorullahumar_profile.png";
